@@ -435,6 +435,13 @@ json DAPServer::handleLaunch(const json& arguments) {
         }
     }
 
+    std::string content = getSource(currentSource_);
+    if (!content.empty()) {
+        // Load the program into basic interpretter
+        basic::BasicInterpreter* interpreter = basic::getInterpreter();
+        interpreter->loadProgram(content);
+    }
+
     sendInitializedEvent();
     sendProcessEvent("BASIC Interpreter", 1);
     sendStoppedEvent("entry", currentThread_, currentLine_);
@@ -571,6 +578,7 @@ json DAPServer::handleScopes(const json& arguments) {
     
     return {{"scopes", scopes}};
 }
+
 
 json DAPServer::handleVariables(const json& arguments) {
     int variablesReference = arguments["variablesReference"];

@@ -29,6 +29,13 @@ Value Functions::call(const std::string& name, const std::vector<Value>& args, V
         // In a full implementation, you'd want to parse and execute the function body
         return Value{0};
     }
+    if (args.size() == 0) {
+        // Check for variables....
+        if (variables->exists(name)) {
+            return variables->get(name);
+        }
+        throw std::runtime_error("Symbol '" + name + "' not defined");
+    }
     
     throw std::runtime_error("Function '" + name + "' not defined");
 }
