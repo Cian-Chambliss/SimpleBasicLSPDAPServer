@@ -9,7 +9,20 @@
 #include <thread>
 #include <mutex>
 #include <condition_variable>
+#include <fstream>
+#include <sstream>
 #include <nlohmann/json.hpp>
+
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#pragma comment(lib, "ws2_32.lib")
+#else
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#endif
 
 namespace dap {
 
@@ -273,6 +286,9 @@ public:
     void sendProcessEvent(const std::string& name, int systemProcessId);
     void sendCapabilitiesEvent(const json& capabilities);
     
+    // Debug stepping support
+    void checkForStep(int line);
+    
     // Debugger control
     void setBreakpoint(const std::string& source, int line);
     void removeBreakpoint(const std::string& source, int line);
@@ -318,17 +334,25 @@ private:
 
     bool enableLogging_;
 
-    std::map<std::string, std::string> sources_;
+    // Debugger state
+    bool stepMode_ = false;
+
+    // Breakpoints: map from source file to set of line numbers
     std::map<std::string, std::set<int>> breakpoints_;
     std::map<int, Breakpoint> breakpointMap_;
     int nextBreakpointId_;
-    
+
+    // Source management
+    std::map<std::string, std::string> sources_;
+
+    // Synchronization for stepping and pausing
+    std::mutex mutex_;
+    std::condition_variable pauseCondition_;
+
     std::map<std::string, std::function<json(const json&)>> requestHandlers_;
     
     // Threading
     std::thread messageThread_;
-    std::mutex mutex_;
-    std::condition_variable cv_;
     
     void setupHandlers();
     DAPMessage createResponse(const json& id, const json& result);
@@ -339,6 +363,9 @@ private:
     int nextBreakpointId();
     bool hasBreakpoint(const std::string& source, int line);
     void updateBreakpointStatus();
+    bool shouldPauseAt(int line);
+    void resume();
+    void sendNetwork(const std::string& message);
 };
 
 } // namespace dap 

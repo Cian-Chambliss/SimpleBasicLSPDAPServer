@@ -3,27 +3,15 @@
 #include <sstream>
 #include <thread>
 #include <chrono>
-#include <fstream>
-#ifdef _WIN32
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#pragma comment(lib, "ws2_32.lib")
-#else
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <unistd.h>
-#include <fcntl.h>
-#endif
-#include "dap\dap_server.h"
+#include "dap/dap_server.h"
 
 namespace dap {
 
 DAPServer::DAPServer() 
     : running_(false), debugging_(false), paused_(false), 
-      currentThread_(1), currentLine_(0), nextBreakpointId_(1),
+      currentThread_(1), currentLine_(0),
       serverSocket_(-1), clientSocket_(-1), useNetwork_(false), port_(4711),
-      enableLogging_(false) // Add logging flag
+      enableLogging_(false), stepMode_(false), nextBreakpointId_(1)
 {
     setupHandlers();
 }
@@ -961,12 +949,24 @@ DAPMessage DAPServer::createErrorResponse(const json& id, int code, const std::s
     return dapMessage;
 }
 
-void DAPServer::sendEvent(const std::string& event, const json& body) {
-    DAPMessage message;
-    message.type = DAPMessageType::EVENT;
-    message.event = event;
-    message.body = body;
-    sendMessage(message);
+void DAPServer::sendEvent(const std::string& event, const nlohmann::json& body) {
+    nlohmann::json message;
+    message["type"] = "event";
+    message["event"] = event;
+    message["body"] = body;
+
+    // Serialize the message to a string
+    std::string content = message.dump();
+
+    // DAP protocol requires a Content-Length header
+    std::string header = "Content-Length: " + std::to_string(content.size()) + "\r\n\r\n";
+
+    // Write header and content to stdout (or socket if using network)
+    if (useNetwork_) {
+        sendNetwork(header + content);
+    } else {
+        std::cout << header << content << std::flush;
+    }
 }
 
 int DAPServer::nextBreakpointId() {
@@ -985,6 +985,49 @@ void DAPServer::updateBreakpointStatus() {
     // Update breakpoint verification status
     for (auto& pair : breakpointMap_) {
         pair.second.verified = true;
+    }
+}
+
+// Called by the interpreter after each statement or line
+void DAPServer::checkForStep(int line) {
+    std::unique_lock<std::mutex> lock(mutex_);
+
+    // Check if we are in step mode or if a breakpoint is set at this line
+    if (shouldPauseAt(line)) {
+        // Send "stopped" event to the client
+        sendStoppedEvent("step", 1);
+
+        // Wait until the user resumes (step/continue)
+        pauseCondition_.wait(lock, [this]() { return !paused_; });
+    }
+}
+
+// Example helper: returns true if we should pause at this line
+bool DAPServer::shouldPauseAt(int line) {
+    // Check step mode or breakpoint
+    if (stepMode_) return true;
+    
+    // Check if any breakpoint is set at this line in any source
+    for (const auto& sourceBreakpoints : breakpoints_) {
+        if (sourceBreakpoints.second.find(line) != sourceBreakpoints.second.end()) {
+            return true;
+        }
+    }
+    return false;
+}
+
+
+
+// Called by DAP protocol handlers when user resumes
+void DAPServer::resume() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    paused_ = false;
+    pauseCondition_.notify_all();
+}
+
+void DAPServer::sendNetwork(const std::string& message) {
+    if (clientSocket_ >= 0) {
+        send(clientSocket_, message.c_str(), message.length(), 0);
     }
 }
 

@@ -72,6 +72,7 @@ std::unique_ptr<ASTNode> Parser::parseStatement() {
 
 std::unique_ptr<ASTNode> Parser::parseLetStatement() {
     auto letStmt = std::make_unique<LetStatementNode>();
+    letStmt->line = current().line;
     
     if (!check(TokenType::IDENTIFIER)) {
         throw std::runtime_error("Expected identifier after LET");
@@ -90,6 +91,7 @@ std::unique_ptr<ASTNode> Parser::parseLetStatement() {
 
 std::unique_ptr<ASTNode> Parser::parseIfStatement() {
     auto ifStmt = std::make_unique<IfStatementNode>();
+    ifStmt->line = current().line;
     
     ifStmt->condition = parseExpression();
     
@@ -108,6 +110,7 @@ std::unique_ptr<ASTNode> Parser::parseIfStatement() {
 
 std::unique_ptr<ASTNode> Parser::parseForStatement() {
     auto forStmt = std::make_unique<ForStatementNode>();
+    forStmt->line = current().line;
     
     if (!check(TokenType::IDENTIFIER)) {
         throw std::runtime_error("Expected identifier after FOR");
@@ -141,6 +144,7 @@ std::unique_ptr<ASTNode> Parser::parseForStatement() {
 
 std::unique_ptr<ASTNode> Parser::parseWhileStatement() {
     auto whileStmt = std::make_unique<WhileStatementNode>();
+    whileStmt->line = current().line;
     
     whileStmt->condition = parseExpression();
     whileStmt->body = parseStatement();
@@ -150,6 +154,7 @@ std::unique_ptr<ASTNode> Parser::parseWhileStatement() {
 
 std::unique_ptr<ASTNode> Parser::parsePrintStatement() {
     auto printStmt = std::make_unique<PrintStatementNode>();
+    printStmt->line = current().line;
     
     while (!isAtEnd() && !check(TokenType::SEMICOLON) && !check(TokenType::COLON)) {
         printStmt->expressions.push_back(parseExpression());
@@ -164,6 +169,7 @@ std::unique_ptr<ASTNode> Parser::parsePrintStatement() {
 
 std::unique_ptr<ASTNode> Parser::parseInputStatement() {
     auto inputStmt = std::make_unique<InputStatementNode>();
+    inputStmt->line = current().line;
     
     if (check(TokenType::STRING)) {
         inputStmt->prompt = current().value;

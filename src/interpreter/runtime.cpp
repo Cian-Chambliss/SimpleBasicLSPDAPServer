@@ -81,31 +81,30 @@ Value Runtime::executeForStatement(const ForStatementNode* node, Variables* vari
     Value start = this->execute(node->startValue.get(), variables, functions);
     Value end = this->execute(node->endValue.get(), variables, functions);
     Value step = node->stepValue ? this->execute(node->stepValue.get(), variables, functions) : Value{1};
-    
-    // Convert to numeric values
+
     double startVal = std::visit([](const auto& v) -> double {
         using T = std::decay_t<decltype(v)>;
         if constexpr (std::is_same_v<T, int>) return static_cast<double>(v);
         else if constexpr (std::is_same_v<T, double>) return v;
         else return 0.0;
     }, start);
-    
+
     double endVal = std::visit([](const auto& v) -> double {
         using T = std::decay_t<decltype(v)>;
         if constexpr (std::is_same_v<T, int>) return static_cast<double>(v);
         else if constexpr (std::is_same_v<T, double>) return v;
         else return 0.0;
     }, end);
-    
+
     double stepVal = std::visit([](const auto& v) -> double {
         using T = std::decay_t<decltype(v)>;
         if constexpr (std::is_same_v<T, int>) return static_cast<double>(v);
         else if constexpr (std::is_same_v<T, double>) return v;
         else return 1.0;
     }, step);
-    
+
     variables->set(node->variableName, Value{startVal});
-    
+
     while (true) {
         Value current = variables->get(node->variableName);
         double currentVal = std::visit([](const auto& v) -> double {
@@ -114,16 +113,22 @@ Value Runtime::executeForStatement(const ForStatementNode* node, Variables* vari
             else if constexpr (std::is_same_v<T, double>) return v;
             else return 0.0;
         }, current);
-        
+
         if (stepVal > 0 && currentVal > endVal) break;
         if (stepVal < 0 && currentVal < endVal) break;
-        
+
         this->execute(node->body.get(), variables, functions);
-        
+
+        // --- DAP step notification ---
+        if (g_dapServer && g_dapServer->isRunning()) {
+            g_dapServer->checkForStep(node->line);
+        }
+        // -----------------------------
+
         currentVal += stepVal;
         variables->set(node->variableName, Value{currentVal});
     }
-    
+
     return Value{};
 }
 
@@ -156,7 +161,7 @@ Value Runtime::executePrintStatement(const PrintStatementNode* node, Variables* 
 
     // Output to DAP OutputEvent if running under DAP
     if (g_dapServer && g_dapServer->isRunning()) {
-        g_dapServer->sendOutputEvent(oss.str(), "stdout");
+        g_dapServer->sendOutputEvent("stdout", oss.str());
     } else {
         std::cout << oss.str();
     }

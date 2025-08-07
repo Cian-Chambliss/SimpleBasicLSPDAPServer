@@ -66,6 +66,9 @@ enum class NodeType {
 // AST Node base class
 class ASTNode {
 public:
+    int line;
+    
+    ASTNode() : line(0) {}
     virtual ~ASTNode() = default;
     virtual NodeType getType() const = 0;
     virtual std::string toString() const = 0;
