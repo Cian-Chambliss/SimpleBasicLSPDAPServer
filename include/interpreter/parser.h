@@ -152,6 +152,7 @@ private:
     
     // Helper methods
     Token current() const;
+    Token last() const;
     Token peek() const;
     bool isAtEnd() const;
     bool check(TokenType type) const;

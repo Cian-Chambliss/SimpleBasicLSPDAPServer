@@ -266,9 +266,9 @@ std::unique_ptr<ASTNode> Parser::parsePrimary() {
         auto literal = std::make_unique<LiteralNode>();
         try {
             if (current().value.find('.') != std::string::npos) {
-                literal->value = std::stod(current().value);
+                literal->value = std::stod(last().value);
             } else {
-                literal->value = std::stoi(current().value);
+                literal->value = std::stoi(last().value);
             }
         } catch (...) {
             literal->value = 0;
@@ -278,13 +278,13 @@ std::unique_ptr<ASTNode> Parser::parsePrimary() {
     
     if (match(TokenType::STRING)) {
         auto literal = std::make_unique<LiteralNode>();
-        literal->value = current().value;
+        literal->value = last().value;
         return literal;
     }
     
     if (match(TokenType::IDENTIFIER)) {
         auto identifier = std::make_unique<IdentifierNode>();
-        identifier->name = current().value;
+        identifier->name = last().value;
         return identifier;
     }
     
@@ -301,6 +301,12 @@ std::unique_ptr<ASTNode> Parser::parsePrimary() {
 Token Parser::current() const {
     return tokens_[current_];
 }
+Token Parser::last() const {
+    if( current_ > 0 )
+        return tokens_[current_ - 1 ];
+    return tokens_[current_];
+}
+
 
 Token Parser::peek() const {
     if (isAtEnd()) return Token(TokenType::EOF_TOKEN, "", 0, 0);
