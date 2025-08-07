@@ -5,6 +5,13 @@
 
 namespace basic {
 
+// Global functions for DAP integration
+void setInterpreter(BasicInterpreter* interpreter);
+BasicInterpreter* getInterpreter();
+
+// Helper function to convert Value to string for DAP
+std::string valueToString(const Value& value);
+
 // Forward declarations
 class Variables;
 class Functions;

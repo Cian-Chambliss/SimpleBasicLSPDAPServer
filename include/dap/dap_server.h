@@ -274,7 +274,7 @@ public:
     
     // Event handlers
     void sendInitializedEvent();
-    void sendStoppedEvent(const std::string& reason, int threadId = 1);
+    void sendStoppedEvent(const std::string& reason, int threadId = 1, int line = 0);
     void sendContinuedEvent(int threadId = 1);
     void sendExitedEvent(int exitCode = 0);
     void sendTerminatedEvent();

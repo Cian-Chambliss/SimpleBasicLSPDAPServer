@@ -16,6 +16,23 @@ namespace basic {
 static dap::DAPServer* g_dapServer = nullptr;
 void setDAPServer(dap::DAPServer* server) { g_dapServer = server; }
 
+// Add a pointer to the BasicInterpreter for DAP access
+static BasicInterpreter* g_interpreter = nullptr;
+void setInterpreter(BasicInterpreter* interpreter) { g_interpreter = interpreter; }
+BasicInterpreter* getInterpreter() { return g_interpreter; }
+
+// Helper function to convert Value to string for DAP
+std::string valueToString(const Value& value) {
+    return std::visit([](const auto& v) -> std::string {
+        using T = std::decay_t<decltype(v)>;
+        if constexpr (std::is_same_v<T, int>) return std::to_string(v);
+        else if constexpr (std::is_same_v<T, double>) return std::to_string(v);
+        else if constexpr (std::is_same_v<T, std::string>) return "\"" + v + "\"";
+        else if constexpr (std::is_same_v<T, bool>) return v ? "true" : "false";
+        else return "unknown";
+    }, value);
+}
+
 Runtime::Runtime() {}
 
 Value Runtime::execute(const ASTNode* node, Variables* variables, Functions* functions) {
@@ -60,6 +77,12 @@ Value Runtime::executeProgram(const ProgramNode* node, Variables* variables, Fun
 }
 
 Value Runtime::executeLetStatement(const LetStatementNode* node, Variables* variables, Functions* functions) {
+    // --- DAP step notification ---
+    if (g_dapServer && g_dapServer->isRunning()) {
+        g_dapServer->checkForStep(node->line);
+    }
+    // -----------------------------
+
     Value value = this->execute(node->value.get(), variables, functions);
     variables->set(node->variableName, value);
     return value;
@@ -67,6 +90,12 @@ Value Runtime::executeLetStatement(const LetStatementNode* node, Variables* vari
 
 Value Runtime::executeIfStatement(const IfStatementNode* node, Variables* variables, Functions* functions) {
     Value condition = this->execute(node->condition.get(), variables, functions);
+    
+    // --- DAP step notification ---
+    if (g_dapServer && g_dapServer->isRunning()) {
+        g_dapServer->checkForStep(node->line);
+    }
+    // -----------------------------
     
     if (this->isTruthy(condition)) {
         return this->execute(node->thenStatement.get(), variables, functions);
@@ -117,13 +146,13 @@ Value Runtime::executeForStatement(const ForStatementNode* node, Variables* vari
         if (stepVal > 0 && currentVal > endVal) break;
         if (stepVal < 0 && currentVal < endVal) break;
 
-        this->execute(node->body.get(), variables, functions);
-
         // --- DAP step notification ---
         if (g_dapServer && g_dapServer->isRunning()) {
             g_dapServer->checkForStep(node->line);
         }
         // -----------------------------
+
+        this->execute(node->body.get(), variables, functions);
 
         currentVal += stepVal;
         variables->set(node->variableName, Value{currentVal});
@@ -134,12 +163,24 @@ Value Runtime::executeForStatement(const ForStatementNode* node, Variables* vari
 
 Value Runtime::executeWhileStatement(const WhileStatementNode* node, Variables* variables, Functions* functions) {
     while (this->isTruthy(this->execute(node->condition.get(), variables, functions))) {
+        // --- DAP step notification ---
+        if (g_dapServer && g_dapServer->isRunning()) {
+            g_dapServer->checkForStep(node->line);
+        }
+        // -----------------------------
+
         this->execute(node->body.get(), variables, functions);
     }
     return Value{};
 }
 
 Value Runtime::executePrintStatement(const PrintStatementNode* node, Variables* variables, Functions* functions) {
+    // --- DAP step notification ---
+    if (g_dapServer && g_dapServer->isRunning()) {
+        g_dapServer->checkForStep(node->line);
+    }
+    // -----------------------------
+
     std::ostringstream oss;
     for (size_t i = 0; i < node->expressions.size(); ++i) {
         Value value = this->execute(node->expressions[i].get(), variables, functions);
@@ -169,6 +210,12 @@ Value Runtime::executePrintStatement(const PrintStatementNode* node, Variables* 
 }
 
 Value Runtime::executeInputStatement(const InputStatementNode* node, Variables* variables, Functions* functions) {
+    // --- DAP step notification ---
+    if (g_dapServer && g_dapServer->isRunning()) {
+        g_dapServer->checkForStep(node->line);
+    }
+    // -----------------------------
+
     if (!node->prompt.empty()) {
         std::cout << node->prompt;
     }

@@ -11,6 +11,9 @@
 using namespace lsp;
 using namespace dap;
 using namespace basic;
+namespace basic {
+void setInterpreter(BasicInterpreter* interpreter);
+}
 
 std::unique_ptr<LSPServer> lspServer;
 std::unique_ptr<DAPServer> dapServer;
@@ -101,8 +104,11 @@ int main(int argc, char* argv[]) {
             if (dapOnly) {
                 dapServer->start(4711, enableLogging);  // Use network mode for DAP-only
                 basic::setDAPServer(dapServer.get());
+                basic::setInterpreter(interpreter.get());
             } else {
                 dapServer->start(enableLogging);  // Use stdin/stdout for interactive mode
+                basic::setDAPServer(dapServer.get());
+                basic::setInterpreter(interpreter.get());
             }
             
         }

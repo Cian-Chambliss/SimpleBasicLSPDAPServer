@@ -110,6 +110,8 @@ public:
     std::string getLastError() const;
     void clearError();
 
+    Value evaluateExpression(const std::string& expr);
+
 private:
     std::unique_ptr<Parser> parser_;
     std::unique_ptr<Lexer> lexer_;

@@ -133,6 +133,17 @@ bool BasicInterpreter::executeLine(const std::string& line) {
     }
 }
 
+Value BasicInterpreter::evaluateExpression(const std::string& expr) {
+    // Tokenize
+    auto tokens = lexer_->tokenize(expr);
+    if (tokens.empty()) throw std::runtime_error("Empty or invalid expression");
+    // Parse
+    auto ast = parser_->parseLine(tokens);
+    if (!ast) throw std::runtime_error("Failed to parse expression");
+    // Execute
+    return runtime_->execute(ast.get(), variables_.get(), functions_.get());
+}
+
 void BasicInterpreter::setBreakpoint(int line) {
     breakpoints_.insert(line);
 }

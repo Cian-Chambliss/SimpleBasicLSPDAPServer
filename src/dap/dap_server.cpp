@@ -1,4 +1,5 @@
 #include "dap/dap_server.h"
+#include "interpreter/runtime.h"
 #include <iostream>
 #include <sstream>
 #include <thread>
@@ -436,7 +437,7 @@ json DAPServer::handleLaunch(const json& arguments) {
 
     sendInitializedEvent();
     sendProcessEvent("BASIC Interpreter", 1);
-    sendStoppedEvent("entry", currentThread_);
+    sendStoppedEvent("entry", currentThread_, currentLine_);
 
     std::cerr << "DAP: Launch completed successfully" << std::endl;
 
@@ -446,7 +447,7 @@ json DAPServer::handleLaunch(const json& arguments) {
 json DAPServer::handleAttach(const json& arguments) {
     debugging_ = true;
     sendInitializedEvent();
-    sendStoppedEvent("entry", currentThread_);
+    sendStoppedEvent("entry", currentThread_, currentLine_);
     return json::object();
 }
 
@@ -470,7 +471,7 @@ json DAPServer::handleRestart(const json& arguments) {
     currentLine_ = 0;
     debugging_ = true;
     sendInitializedEvent();
-    sendStoppedEvent("restart", currentThread_);
+    sendStoppedEvent("restart", currentThread_, currentLine_);
     return json::object();
 }
 
@@ -509,26 +510,26 @@ json DAPServer::handleContinue(const json& arguments) {
 
 json DAPServer::handleNext(const json& arguments) {
     currentLine_++;
-    sendStoppedEvent("step", currentThread_);
+    sendStoppedEvent("step", currentThread_, currentLine_);
     return json::object();
 }
 
 json DAPServer::handleStepIn(const json& arguments) {
     // Simulate stepping into the next statement
     currentLine_++;
-    sendStoppedEvent("step", currentThread_);
+    sendStoppedEvent("step", currentThread_, currentLine_);
     return json::object();
 }
 
 json DAPServer::handleStepOut(const json& arguments) {
     currentLine_++;
-    sendStoppedEvent("step", currentThread_);
+    sendStoppedEvent("step", currentThread_, currentLine_);
     return json::object();
 }
 
 json DAPServer::handlePause(const json& arguments) {
     paused_ = true;
-    sendStoppedEvent("pause", currentThread_);
+    sendStoppedEvent("pause", currentThread_, currentLine_);
     return json::object();
 }
 
@@ -575,28 +576,53 @@ json DAPServer::handleVariables(const json& arguments) {
     int variablesReference = arguments["variablesReference"];
     json variables = json::array();
     
+    // Get the interpreter instance
+    basic::BasicInterpreter* interpreter = basic::getInterpreter();
+    if (!interpreter) {
+        return {{"variables", variables}};
+    }
+    
     if (variablesReference == 1) {
-        // Local variables
-        Variable var1("X");
-        var1.value = "10";
-        var1.type = "number";
-        variables.push_back(var1.toJson());
+        // Local variables - get all variables from the interpreter
+        std::map<std::string, basic::Value> allVars = interpreter->getAllVariables();
         
-        Variable var2("I");
-        var2.value = "5";
-        var2.type = "number";
-        variables.push_back(var2.toJson());
-        
-        Variable var3("NAME");
-        var3.value = "\"John\"";
-        var3.type = "string";
-        variables.push_back(var3.toJson());
+        for (const auto& [name, value] : allVars) {
+            Variable var(name);
+            var.value = basic::valueToString(value);
+            
+            // Determine type based on the value
+            std::visit([&var](const auto& v) {
+                using T = std::decay_t<decltype(v)>;
+                if constexpr (std::is_same_v<T, int>) var.type = "number";
+                else if constexpr (std::is_same_v<T, double>) var.type = "number";
+                else if constexpr (std::is_same_v<T, std::string>) var.type = "string";
+                else if constexpr (std::is_same_v<T, bool>) var.type = "boolean";
+                else var.type = "unknown";
+            }, value);
+            
+            variables.push_back(var.toJson());
+        }
     } else if (variablesReference == 2) {
-        // Global variables
-        Variable var1("PI");
-        var1.value = "3.14159";
-        var1.type = "number";
-        variables.push_back(var1.toJson());
+        // Global variables - for now, same as local variables
+        // In a more sophisticated implementation, you might distinguish between local and global scope
+        std::map<std::string, basic::Value> allVars = interpreter->getAllVariables();
+        
+        for (const auto& [name, value] : allVars) {
+            Variable var(name);
+            var.value = basic::valueToString(value);
+            
+            // Determine type based on the value
+            std::visit([&var](const auto& v) {
+                using T = std::decay_t<decltype(v)>;
+                if constexpr (std::is_same_v<T, int>) var.type = "number";
+                else if constexpr (std::is_same_v<T, double>) var.type = "number";
+                else if constexpr (std::is_same_v<T, std::string>) var.type = "string";
+                else if constexpr (std::is_same_v<T, bool>) var.type = "boolean";
+                else var.type = "unknown";
+            }, value);
+            
+            variables.push_back(var.toJson());
+        }
     }
     
     return {{"variables", variables}};
@@ -604,13 +630,36 @@ json DAPServer::handleVariables(const json& arguments) {
 
 json DAPServer::handleEvaluate(const json& arguments) {
     std::string expression = arguments["expression"];
-    
-    // Simple evaluation - in a real implementation, you'd parse and evaluate the expression
     json result;
-    result["result"] = "Evaluated: " + expression;
-    result["type"] = "string";
-    result["variablesReference"] = 0;
-    
+
+    // Get the interpreter instance
+    basic::BasicInterpreter* interpreter = basic::getInterpreter();
+    if (!interpreter) {
+        result["result"] = "[DAP] No interpreter instance available.";
+        result["type"] = "error";
+        result["variablesReference"] = 0;
+        return result;
+    }
+
+    try {
+        // Use the interpreter's public method
+        auto value = interpreter->evaluateExpression(expression);
+        result["result"] = basic::valueToString(value);
+        // Determine type
+        std::visit([&result](const auto& v) {
+            using T = std::decay_t<decltype(v)>;
+            if constexpr (std::is_same_v<T, int>) result["type"] = "number";
+            else if constexpr (std::is_same_v<T, double>) result["type"] = "number";
+            else if constexpr (std::is_same_v<T, std::string>) result["type"] = "string";
+            else if constexpr (std::is_same_v<T, bool>) result["type"] = "boolean";
+            else result["type"] = "unknown";
+        }, value);
+        result["variablesReference"] = 0;
+    } catch (const std::exception& e) {
+        result["result"] = std::string("[DAP] Exception: ") + e.what();
+        result["type"] = "error";
+        result["variablesReference"] = 0;
+    }
     return result;
 }
 
@@ -686,11 +735,12 @@ void DAPServer::sendInitializedEvent() {
     sendEvent("initialized", json::object());
 }
 
-void DAPServer::sendStoppedEvent(const std::string& reason, int threadId) {
+void DAPServer::sendStoppedEvent(const std::string& reason, int threadId, int line) {
     json body;
     body["reason"] = reason;
     body["threadId"] = threadId;
     body["allThreadsStopped"] = true;
+    body["line"] = line;
     sendEvent("stopped", body);
 }
 
@@ -790,13 +840,13 @@ void DAPServer::step() {
         paused_ = false;
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
         paused_ = true;
-        sendStoppedEvent("step", currentThread_);
+        sendStoppedEvent("step", currentThread_, currentLine_);
     }
 }
 
 void DAPServer::stepIn() {
     currentLine_++;
-    sendStoppedEvent("step", currentThread_);
+    sendStoppedEvent("step", currentThread_, currentLine_);
 }
 
 void DAPServer::stepOut() {
@@ -810,7 +860,7 @@ void DAPServer::continueExecution() {
 
 void DAPServer::pause() {
     paused_ = true;
-    sendStoppedEvent("pause", currentThread_);
+    sendStoppedEvent("pause", currentThread_, currentLine_);
 }
 
 // Debug state methods
@@ -994,9 +1044,11 @@ void DAPServer::checkForStep(int line) {
 
     // Check if we are in step mode or if a breakpoint is set at this line
     if (shouldPauseAt(line)) {
-        // Send "stopped" event to the client
-        sendStoppedEvent("step", 1);
-
+        // Send "stopped" event to the client with the current line number
+        sendStoppedEvent("step", 1, line);
+        if( line > 0 ) {
+            currentLine_ = line;
+        }
         // Wait until the user resumes (step/continue)
         pauseCondition_.wait(lock, [this]() { return !paused_; });
     }
