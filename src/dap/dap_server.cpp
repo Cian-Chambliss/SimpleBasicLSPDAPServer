@@ -440,6 +440,7 @@ json DAPServer::handleLaunch(const json& arguments) {
         // Load the program into basic interpretter
         basic::BasicInterpreter* interpreter = basic::getInterpreter();
         interpreter->loadProgram(content);
+        interpreter->pause();
     }
 
     sendInitializedEvent();
@@ -517,6 +518,9 @@ json DAPServer::handleContinue(const json& arguments) {
 
 json DAPServer::handleNext(const json& arguments) {
     currentLine_++;
+    basic::BasicInterpreter* interpreter = basic::getInterpreter();
+    interpreter->step();
+    currentLine_ = interpreter->getCurrentLine();
     sendStoppedEvent("step", currentThread_, currentLine_);
     return json::object();
 }
@@ -848,6 +852,9 @@ void DAPServer::step() {
         paused_ = false;
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
         paused_ = true;
+        basic::BasicInterpreter* interpreter = basic::getInterpreter();
+        interpreter->step();
+        currentLine_ = interpreter->getCurrentLine();
         sendStoppedEvent("step", currentThread_, currentLine_);
     }
 }
