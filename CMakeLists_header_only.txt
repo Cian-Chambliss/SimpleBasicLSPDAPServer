@@ -1,0 +1,71 @@
+cmake_minimum_required(VERSION 3.16)
+project(BasicInterpreter VERSION 1.0.0 LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Download nlohmann/json header
+include(FetchContent)
+FetchContent_Declare(
+    nlohmann_json
+    URL https://github.com/nlohmann/json/releases/download/v3.11.2/json.tar.xz
+    URL_HASH SHA256=6bea5877b1541d353bd77bdfbdb2696333ae5ed8e9cc1a9570ed5c3e01fef889
+)
+FetchContent_GetProperties(nlohmann_json)
+if(NOT nlohmann_json_POPULATED)
+    FetchContent_Populate(nlohmann_json)
+endif()
+
+# Find Threads
+find_package(Threads REQUIRED)
+
+# Include directories
+include_directories(${CMAKE_SOURCE_DIR}/src)
+include_directories(${CMAKE_SOURCE_DIR}/include)
+include_directories(${nlohmann_json_SOURCE_DIR}/include)
+
+# Source files
+set(INTERPRETER_SOURCES
+    src/interpreter/basic_interpreter.cpp
+    src/interpreter/parser.cpp
+    src/interpreter/lexer.cpp
+    src/interpreter/ast.cpp
+    src/interpreter/runtime.cpp
+    src/interpreter/variables.cpp
+    src/interpreter/functions.cpp
+)
+
+set(LSP_SOURCES
+    src/lsp/lsp_server.cpp
+    src/lsp/lsp_handler.cpp
+    src/lsp/document_manager.cpp
+)
+
+set(DAP_SOURCES
+    src/dap/dap_server.cpp
+    src/dap/dap_handler.cpp
+    src/dap/debugger.cpp
+    src/dap/breakpoint_manager.cpp
+)
+
+set(MAIN_SOURCES
+    src/main.cpp
+)
+
+# Create the main interpreter executable
+add_executable(basic_interpreter ${MAIN_SOURCES} ${INTERPRETER_SOURCES} ${LSP_SOURCES} ${DAP_SOURCES})
+
+# Link libraries (no need to link nlohmann_json as it's header-only)
+target_link_libraries(basic_interpreter 
+    Threads::Threads
+)
+
+# Set compiler flags
+if(MSVC)
+    target_compile_options(basic_interpreter PRIVATE /W4)
+else()
+    target_compile_options(basic_interpreter PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# Install target
+install(TARGETS basic_interpreter DESTINATION bin) 
