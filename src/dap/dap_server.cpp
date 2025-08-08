@@ -12,7 +12,7 @@ DAPServer::DAPServer()
     : running_(false), debugging_(false), paused_(false),
     currentThread_(1), currentLine_(0),
     serverSocket_(-1), clientSocket_(-1), useNetwork_(false), port_(4711),
-    enableLogging_(false), stepMode_(false), nextBreakpointId_(1), checkConnection_(false)
+    enableLogging_(false), stepMode_(false), nextBreakpointId_(1), checkConnection_(false) , runTillStop_(false)
 {
     setupHandlers();
 }
@@ -176,6 +176,12 @@ void DAPServer::sendMessage(const DAPMessage& message) {
 
 DAPMessage DAPServer::receiveMessage() {
     static std::string socketBuffer;
+
+    if (runTillStop_) {
+        runTillStop_ = false;
+        basic::BasicInterpreter* interpreter = basic::getInterpreter();
+        interpreter->continueExecution();
+    }
 
     std::string line;
     size_t contentLength = 0;
@@ -529,6 +535,7 @@ json DAPServer::handleSetExceptionBreakpoints(const json& arguments) {
 
 json DAPServer::handleContinue(const json& arguments) {
     paused_ = false;
+    runTillStop_ = true;
     sendContinuedEvent(currentThread_);
     return json::object();
 }

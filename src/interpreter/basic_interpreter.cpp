@@ -182,6 +182,10 @@ void BasicInterpreter::step() {
 
 void BasicInterpreter::continueExecution() {
     paused_ = false;
+    while(currentLine_ < lines_.size()) {
+        executeLine(lines_[currentLine_]);
+        currentLine_++;
+    }
 }
 
 void BasicInterpreter::pause() {
@@ -235,6 +239,8 @@ void BasicInterpreter::cleanup() {
     lastError_.clear();
     source_.clear();
     currentLine_ = 0;
+    runtime_ = std::make_unique<Runtime>();
+
 }
 
 

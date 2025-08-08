@@ -337,6 +337,7 @@ private:
 
     // Debugger state
     bool stepMode_ = false;
+    bool runTillStop_ = false;
 
     // Breakpoints: map from source file to set of line numbers
     std::map<std::string, std::set<int>> breakpoints_;
