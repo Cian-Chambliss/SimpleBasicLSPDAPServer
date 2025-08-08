@@ -8,11 +8,11 @@
 
 namespace dap {
 
-DAPServer::DAPServer() 
-    : running_(false), debugging_(false), paused_(false), 
-      currentThread_(1), currentLine_(0),
-      serverSocket_(-1), clientSocket_(-1), useNetwork_(false), port_(4711),
-      enableLogging_(false), stepMode_(false), nextBreakpointId_(1)
+DAPServer::DAPServer()
+    : running_(false), debugging_(false), paused_(false),
+    currentThread_(1), currentLine_(0),
+    serverSocket_(-1), clientSocket_(-1), useNetwork_(false), port_(4711),
+    enableLogging_(false), stepMode_(false), nextBreakpointId_(1), checkConnection_(false)
 {
     setupHandlers();
 }
@@ -139,7 +139,8 @@ void DAPServer::sendMessage(const DAPMessage& message) {
         response["seq"] = 1; // Simple sequence number
         response["type"] = "response";
         response["request_seq"] = message.id;
-        response["command"] = message.command;
+        if(!message.command.empty())
+            response["command"] = message.command;
         if (!message.result.is_null()) {
             response["body"] = message.result;
         }
@@ -199,6 +200,8 @@ DAPMessage DAPServer::receiveMessage() {
             // Read more data from socket
             char buffer[1024];
             int bytesRead = recv(clientSocket_, buffer, sizeof(buffer), 0);
+            if (bytesRead == 0)
+                checkConnection_ = true;
             if (bytesRead <= 0) {
                 return DAPMessage(DAPMessageType::REQUEST, "");
             }
@@ -209,6 +212,8 @@ DAPMessage DAPServer::receiveMessage() {
         while (socketBuffer.size() < contentLength) {
             char buffer[1024];
             int bytesRead = recv(clientSocket_, buffer, sizeof(buffer), 0);
+            if (bytesRead == 0)
+                checkConnection_ = true;
             if (bytesRead <= 0) {
                 return DAPMessage(DAPMessageType::REQUEST, "");
             }
@@ -320,8 +325,14 @@ void DAPServer::processMessage(const DAPMessage& message) {
         if (handler != requestHandlers_.end()) {
             json result = handler->second(message.arguments);
             sendMessage(createResponse(message.id, result));
-        } else {
+        }
+        else if (!message.command.empty()) {
             sendMessage(createErrorResponse(message.id, -32601, "Method not found"));
+        } else if(checkConnection_) {
+            // Restart the socket server
+            checkConnection_ = false;
+            stop();
+            start(port_, enableLogging_);
         }
     }
 }
@@ -363,6 +374,7 @@ json DAPServer::handleInitialize(const json& arguments) {
         {"supportsHitConditionalBreakpoints", false},
         {"supportsEvaluateForHovers", true},
         {"exceptionBreakpointFilters", json::array()},
+        {"supportsSetBreakpoints", true},
         {"supportsStepBack", false},
         {"supportsSetVariable", true},
         {"supportsRestartFrame", false},
@@ -387,9 +399,9 @@ json DAPServer::handleInitialize(const json& arguments) {
         {"supportsDataBreakpoints", false},
         {"supportsReadMemoryRequest", false},
         {"supportsWriteMemoryRequest", false},
-        {"supportsDisassembleRequest", false}
+        {"supportsDisassembleRequest", false},
+        {"supportsBreakpointLocationsRequest", true}
     };
-    
     return {{"capabilities", capabilities}};
 }
 
@@ -462,6 +474,11 @@ json DAPServer::handleAttach(const json& arguments) {
 json DAPServer::handleDisconnect(const json& arguments) {
     debugging_ = false;
     paused_ = false;
+    sources_.erase(currentSource_);
+    currentLine_ = 0;
+    currentSource_.clear();
+    basic::BasicInterpreter* interpreter = basic::getInterpreter();
+    interpreter->cleanup();
     return json::object();
 }
 

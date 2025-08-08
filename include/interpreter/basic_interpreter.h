@@ -112,7 +112,7 @@ public:
     void clearError();
 
     Value evaluateExpression(const std::string& expr);
-
+    void cleanup();
 private:
     std::unique_ptr<Parser> parser_;
     std::unique_ptr<Lexer> lexer_;

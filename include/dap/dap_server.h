@@ -331,6 +331,7 @@ private:
     int clientSocket_;
     bool useNetwork_;
     int port_;
+    bool checkConnection_;
 
     bool enableLogging_;
 

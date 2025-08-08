@@ -228,4 +228,14 @@ void BasicInterpreter::clearError() {
     lastError_.clear();
 }
 
+void BasicInterpreter::cleanup() {
+    // Reset...
+    variables_ = std::make_unique<Variables>();
+    lines_.clear();
+    lastError_.clear();
+    source_.clear();
+    currentLine_ = 0;
+}
+
+
 } // namespace basic 
