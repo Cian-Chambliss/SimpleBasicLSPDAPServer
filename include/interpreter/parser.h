@@ -54,6 +54,12 @@ public:
     std::string toString() const override;
 };
 
+class NextStatementNode : public ASTNode {
+public:
+    NodeType getType() const override { return NodeType::NEXT_STATEMENT; }
+    std::string toString() const override;
+};
+
 class WhileStatementNode : public ASTNode {
 public:
     std::unique_ptr<ASTNode> condition;
@@ -141,6 +147,7 @@ private:
     std::unique_ptr<ASTNode> parseLetStatement();
     std::unique_ptr<ASTNode> parseIfStatement();
     std::unique_ptr<ASTNode> parseForStatement();
+    std::unique_ptr<ASTNode> parseNextStatement();
     std::unique_ptr<ASTNode> parseWhileStatement();
     std::unique_ptr<ASTNode> parsePrintStatement();
     std::unique_ptr<ASTNode> parseInputStatement();

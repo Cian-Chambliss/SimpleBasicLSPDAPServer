@@ -19,6 +19,7 @@ class ProgramNode;
 class LetStatementNode;
 class IfStatementNode;
 class ForStatementNode;
+class NextStatementNode;
 class WhileStatementNode;
 class PrintStatementNode;
 class InputStatementNode;
@@ -28,8 +29,21 @@ class UnaryExpressionNode;
 class LiteralNode;
 class IdentifierNode;
 
+class RuntimeBlock {
+public:
+    // For loop for now - TBD add others
+    int line;
+    std::string variableName;
+    double currentVal;
+    double endVal;
+    double stepVal;
+    RuntimeBlock(std::string name,double _current, double _end, double _step) : line(0) , variableName(name), currentVal(_current), endVal(_end), stepVal(_step) {
+    }
+};
+
 class Runtime {
 public:
+    std::vector< std::unique_ptr<RuntimeBlock> > block;
     Runtime();
     
     Value execute(const ASTNode* node, Variables* variables, Functions* functions);
@@ -39,6 +53,7 @@ private:
     Value executeLetStatement(const LetStatementNode* node, Variables* variables, Functions* functions);
     Value executeIfStatement(const IfStatementNode* node, Variables* variables, Functions* functions);
     Value executeForStatement(const ForStatementNode* node, Variables* variables, Functions* functions);
+    Value executeNextStatement(const NextStatementNode* node, Variables* variables, Functions* functions);
     Value executeWhileStatement(const WhileStatementNode* node, Variables* variables, Functions* functions);
     Value executePrintStatement(const PrintStatementNode* node, Variables* variables, Functions* functions);
     Value executeInputStatement(const InputStatementNode* node, Variables* variables, Functions* functions);

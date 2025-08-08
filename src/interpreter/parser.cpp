@@ -41,6 +41,8 @@ std::unique_ptr<ASTNode> Parser::parseStatement() {
             return parseIfStatement();
         } else if (match(TokenType::FOR)) {
             return parseForStatement();
+        } else if (match(TokenType::NEXT)) {
+            return parseNextStatement();
         } else if (match(TokenType::WHILE)) {
             return parseWhileStatement();
         } else if (match(TokenType::PRINT)) {
@@ -140,6 +142,11 @@ std::unique_ptr<ASTNode> Parser::parseForStatement() {
     forStmt->body = parseStatement();
     
     return forStmt;
+}
+
+std::unique_ptr<ASTNode> Parser::parseNextStatement() {
+    auto nextStmt = std::make_unique<NextStatementNode>();
+    return nextStmt;
 }
 
 std::unique_ptr<ASTNode> Parser::parseWhileStatement() {
@@ -405,6 +412,12 @@ std::string ForStatementNode::toString() const {
     result += " " + body->toString();
     return result;
 }
+
+std::string NextStatementNode::toString() const {
+    std::string result = "NEXT";
+    return result;
+}
+
 
 std::string WhileStatementNode::toString() const {
     return "WHILE " + condition->toString() + " " + body->toString();

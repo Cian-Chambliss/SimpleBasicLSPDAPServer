@@ -47,6 +47,8 @@ Value Runtime::execute(const ASTNode* node, Variables* variables, Functions* fun
             return executeIfStatement(static_cast<const IfStatementNode*>(node), variables, functions);
         case NodeType::FOR_STATEMENT:
             return executeForStatement(static_cast<const ForStatementNode*>(node), variables, functions);
+        case NodeType::NEXT_STATEMENT:
+            return executeNextStatement(static_cast<const NextStatementNode*>(node), variables, functions);
         case NodeType::WHILE_STATEMENT:
             return executeWhileStatement(static_cast<const WhileStatementNode*>(node), variables, functions);
         case NodeType::PRINT_STATEMENT:
@@ -115,6 +117,7 @@ Value Runtime::executeForStatement(const ForStatementNode* node, Variables* vari
         using T = std::decay_t<decltype(v)>;
         if constexpr (std::is_same_v<T, int>) return static_cast<double>(v);
         else if constexpr (std::is_same_v<T, double>) return v;
+        else if constexpr (std::is_same_v<T, double>) return v;
         else return 0.0;
     }, start);
 
@@ -146,18 +149,42 @@ Value Runtime::executeForStatement(const ForStatementNode* node, Variables* vari
         if (stepVal > 0 && currentVal > endVal) break;
         if (stepVal < 0 && currentVal < endVal) break;
 
+        // -----------------------------
+        if (!node->body.get()) {
+            // Push a context
+            block.push_back(std::make_unique<RuntimeBlock>(node->variableName, currentVal, endVal, stepVal));
+            break;
+        }
         // --- DAP step notification ---
         if (g_dapServer && g_dapServer->isRunning()) {
             g_dapServer->checkForStep(node->line);
         }
-        // -----------------------------
-
         this->execute(node->body.get(), variables, functions);
 
         currentVal += stepVal;
         variables->set(node->variableName, Value{currentVal});
     }
 
+    return Value{};
+}
+
+Value Runtime::executeNextStatement(const NextStatementNode* node, Variables* variables, Functions* functions) {
+    // Got to line after the loop...
+    if (!block.empty()) {
+        RuntimeBlock* blk = block.back().get();
+        if (blk->line != 0) {
+            // Backtrack to the for loop
+            blk->currentVal += blk->stepVal;
+            variables->set(blk->variableName, Value{ blk->currentVal });
+            if (!(blk->stepVal > 0 && blk->currentVal > blk->endVal) && !(blk->stepVal < 0 && blk->currentVal < blk->endVal)) {
+                // return a line number
+                return Value(blk->line);
+            }
+            else {
+                block.pop_back();
+            }
+        }
+    }
     return Value{};
 }
 

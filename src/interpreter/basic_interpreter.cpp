@@ -119,13 +119,29 @@ bool BasicInterpreter::executeLine(const std::string& line) {
         // Parse the line
         auto ast = parser_->parseLine(tokens);
         if (!ast) {
+            // If end of loop - 'Next' - we need to test for that with already started loops 
             lastError_ = "Failed to parse line: " + line;
             return false;
         }
         
         // Execute the line
-        Value result = runtime_->execute(ast.get(), variables_.get(), functions_.get());
-        
+        Value result = runtime_->execute(ast.get(), variables_.get(), functions_.get());        
+
+        // Remember the line of the statement
+        if (!runtime_->block.empty()) {
+            RuntimeBlock* blk = runtime_->block.back().get();
+            if (blk->line == 0) {
+                blk->line = currentLine_;
+            } else {
+                // Check the result for a number (line number returned)
+                if (std::holds_alternative<int>(result)) {
+                    int ln = std::get<int>(result);
+                    if (ln > 0) {
+                        currentLine_ = ln;
+                    }
+                }
+            }
+        }
         return true;
     } catch (const std::exception& e) {
         lastError_ = "Error executing line: " + std::string(e.what());
