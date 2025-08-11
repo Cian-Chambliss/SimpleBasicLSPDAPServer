@@ -89,6 +89,7 @@ public:
     // Debugging support
     void setBreakpoint(int line);
     void removeBreakpoint(int line);
+    void clearBreakpoints();
     void step();
     void continueExecution();
     void pause();

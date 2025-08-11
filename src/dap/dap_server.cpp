@@ -181,6 +181,8 @@ DAPMessage DAPServer::receiveMessage() {
         runTillStop_ = false;
         basic::BasicInterpreter* interpreter = basic::getInterpreter();
         interpreter->continueExecution();
+        currentLine_ = interpreter->getCurrentLine();
+        sendStoppedEvent("step", currentThread_, currentLine_);
     }
 
     std::string line;
@@ -472,6 +474,7 @@ json DAPServer::handleLaunch(const json& arguments) {
     return json::object();
 }
 
+
 void DAPServer::NestedEventHandler()
 {
     if (useNetwork_ && clientSocket_ >= 0) {
@@ -499,6 +502,35 @@ void DAPServer::NestedEventHandler()
         }
     }
 }
+
+#include <algorithm> // For std::equal
+#include <cctype>    // For std::tolower
+
+bool case_insensitive_compare(const std::string& s1, const std::string& s2) {
+    if (s1.length() != s2.length()) {
+        return false; // Strings of different lengths cannot be equal
+    }
+
+    // Use std::equal with a lambda to compare characters case-insensitively
+    return std::equal(s1.begin(), s1.end(), s2.begin(),
+                      [](char a, char b) {
+                          return std::tolower(static_cast<unsigned char>(a)) ==
+                                 std::tolower(static_cast<unsigned char>(b));
+                      });
+}
+
+void DAPServer::resyncBreakpoints() {
+    basic::BasicInterpreter* interpreter = basic::getInterpreter();
+    interpreter->clearBreakpoints();
+    for (const auto& [source, lines] : breakpoints_) {
+        if (case_insensitive_compare(source, currentSource_)) {
+            for (int line : lines) {
+                interpreter->setBreakpoint(line);
+            }   
+        }
+    }
+}
+
 
 json DAPServer::handleAttach(const json& arguments) {
     debugging_ = true;
@@ -551,6 +583,7 @@ json DAPServer::handleSetBreakpoints(const json& arguments) {
         breakpoint["line"] = line;
         response.push_back(breakpoint);
     }
+    resyncBreakpoints();
     
     return {{"breakpoints", response}};
 }

@@ -371,6 +371,7 @@ private:
     bool shouldPauseAt(int line);
     void resume();
     void sendNetwork(const std::string& message);
+    void resyncBreakpoints();
 };
 
 } // namespace dap 

@@ -168,6 +168,12 @@ void BasicInterpreter::removeBreakpoint(int line) {
     breakpoints_.erase(line);
 }
 
+void BasicInterpreter::clearBreakpoints()
+{
+    breakpoints_.clear();
+}
+
+
 void BasicInterpreter::step() {
     if (paused_) {
         paused_ = false;
@@ -183,6 +189,11 @@ void BasicInterpreter::step() {
 void BasicInterpreter::continueExecution() {
     paused_ = false;
     while(currentLine_ < lines_.size()) {
+        if (breakpoints_.find(currentLine_ + 1) != breakpoints_.end())
+        {
+            paused_ = true;
+            break;
+        }
         executeLine(lines_[currentLine_]);
         currentLine_++;
     }
