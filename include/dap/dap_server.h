@@ -271,7 +271,10 @@ public:
     json handleReadMemory(const json &arguments);
     json handleWriteMemory(const json& arguments);
     json handleDisassemble(const json& arguments);
+    json handleConfigurationDone(const json& arguments);
     
+    void NestedEventHandler();
+
     // Event handlers
     void sendInitializedEvent();
     void sendStoppedEvent(const std::string& reason, int threadId = 1, int line = 0);

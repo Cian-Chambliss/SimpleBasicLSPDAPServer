@@ -370,17 +370,18 @@ void DAPServer::setupHandlers() {
     requestHandlers_["loadedSources"] = [this](const json& args) { return handleLoadedSources(args); };
     requestHandlers_["exceptionInfo"] = [this](const json& args) { return handleExceptionInfo(args); };
     requestHandlers_["loadSource"] = [this](const json& args) { return handleLoadSource(args); };
+    requestHandlers_["configurationDoneRequest"] = [this](const json& args) { return handleConfigurationDone(args); };
 }
 
 json DAPServer::handleInitialize(const json& arguments) {
     json capabilities = {
         {"supportsConfigurationDoneRequest", true},
-        {"supportsFunctionBreakpoints", false},
+        {"supportsFunctionBreakpoints", true},
         {"supportsConditionalBreakpoints", false},
         {"supportsHitConditionalBreakpoints", false},
         {"supportsEvaluateForHovers", true},
-        {"exceptionBreakpointFilters", json::array()},
-        {"supportsSetBreakpoints", true},
+ //     {"exceptionBreakpointFilters", json::array()},
+ //      {"supportsSetBreakpoints", true},
         {"supportsStepBack", false},
         {"supportsSetVariable", true},
         {"supportsRestartFrame", false},
@@ -462,12 +463,41 @@ json DAPServer::handleLaunch(const json& arguments) {
     }
 
     sendInitializedEvent();
+
     sendProcessEvent("BASIC Interpreter", 1);
     sendStoppedEvent("entry", currentThread_, currentLine_);
 
     std::cerr << "DAP: Launch completed successfully" << std::endl;
 
     return json::object();
+}
+
+void DAPServer::NestedEventHandler()
+{
+    if (useNetwork_ && clientSocket_ >= 0) {
+        for (;; ) {
+            unsigned long bytesAvailable = 0;
+            int result = ioctlsocket(clientSocket_, FIONREAD, &bytesAvailable);
+            if (result == 0) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                result = ioctlsocket(clientSocket_, FIONREAD, &bytesAvailable);
+            }
+            if (result > 0) {
+                try {
+                    DAPMessage message = receiveMessage();
+                    if (message.type != DAPMessageType::EVENT) {
+                        processMessage(message);
+                    }
+                }
+                catch (const std::exception& e) {
+                    // Handle DAP communication errors
+                }
+            }
+            else {
+                break;
+            }
+        }
+    }
 }
 
 json DAPServer::handleAttach(const json& arguments) {
@@ -530,7 +560,7 @@ json DAPServer::handleSetFunctionBreakpoints(const json& arguments) {
 }
 
 json DAPServer::handleSetExceptionBreakpoints(const json& arguments) {
-    return json::object();
+    return{ {"breakpoints", json::array()} };
 }
 
 json DAPServer::handleContinue(const json& arguments) {
@@ -765,6 +795,11 @@ json DAPServer::handleLoadSource(const json& arguments) {
 
     return {{"success", true}, {"path", sourcePath}};
 }
+
+json DAPServer::handleConfigurationDone(const json& arguments) {
+    return json::object();
+}
+
 
 // Event handlers
 void DAPServer::sendInitializedEvent() {
@@ -1046,6 +1081,11 @@ void DAPServer::sendEvent(const std::string& event, const nlohmann::json& body) 
 
     // Serialize the message to a string
     std::string content = message.dump();
+
+    if (enableLogging_) {
+        std::cerr << "[DAP] Sending Event: " << content << std::endl;
+    }
+
 
     // DAP protocol requires a Content-Length header
     std::string header = "Content-Length: " + std::to_string(content.size()) + "\r\n\r\n";
